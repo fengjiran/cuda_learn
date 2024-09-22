@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cu)
 
 include_directories(${PROJECT_SOURCE_DIR}/include
+        ${PROJECT_SOURCE_DIR}/common
         "/home/richard/project/cutlass-3.5.1/include")
 
 add_executable(${PROJECT_NAME} ${SRC_FILES} main.cu)

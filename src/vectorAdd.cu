@@ -11,6 +11,7 @@
  */
 
 #include "vectorAdd.cuh"
+#include "helper_math.h"
 
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>
