@@ -12,14 +12,10 @@
 
 #include "vectorAdd.cuh"
 
-// #include <cstdio>
+#include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>
 #include <random>
 #include <vector>
-
-// For the CUDA runtime routines (prefixed with "cuda_")
-#include <cuda_runtime.h>
-// #include <helper_cuda.h>
 
 /**
  * CUDA Kernel Device code
@@ -46,9 +42,9 @@ int test_vectorAdd() {
     size_t size = numElements * sizeof(float);
     std::cout << "[Vector addition of " << numElements << " elements]\n";
 
-    std::vector<float> h_A(numElements);// Allocate the host input vector A
-    std::vector<float> h_B(numElements);// Allocate the host input vector B
-    std::vector<float> h_C(numElements);// Allocate the host output vector C
+    std::vector<float> hostVecA(numElements);// Allocate the host input vector A
+    std::vector<float> hostVecB(numElements);// Allocate the host input vector B
+    std::vector<float> hostVecC(numElements);// Allocate the host output vector C
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -56,13 +52,13 @@ int test_vectorAdd() {
 
     // Initialize the host input vectors
     for (int i = 0; i < numElements; ++i) {
-        h_A[i] = dist(gen);
-        h_B[i] = dist(gen);
+        hostVecA[i] = dist(gen);
+        hostVecB[i] = dist(gen);
     }
 
     // Allocate the device input vector A
-    float* d_A = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&d_A), size);
+    float* devPtrA = nullptr;
+    err = cudaMalloc(reinterpret_cast<void**>(&devPtrA), size);
     if (err != cudaSuccess) {
         std::cerr << "Failed to allocate device vector A ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
@@ -70,8 +66,8 @@ int test_vectorAdd() {
     }
 
     // Allocate the device input vector A
-    float* d_B = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&d_B), size);
+    float* devPtrB = nullptr;
+    err = cudaMalloc(reinterpret_cast<void**>(&devPtrB), size);
     if (err != cudaSuccess) {
         std::cerr << "Failed to allocate device vector B ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
@@ -79,8 +75,8 @@ int test_vectorAdd() {
     }
 
     // Allocate the device output vector C
-    float* d_C = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&d_C), size);
+    float* devPtrC = nullptr;
+    err = cudaMalloc(reinterpret_cast<void**>(&devPtrC), size);
     if (err != cudaSuccess) {
         std::cerr << "Failed to allocate device vector C ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
@@ -90,14 +86,14 @@ int test_vectorAdd() {
     // Copy the host input vectors A and B in host memory to the device input
     // vectors in device memory
     std::cout << "Copy input data from the host memory to the CUDA device\n";
-    err = cudaMemcpy(d_A, h_A.data(), size, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(devPtrA, hostVecA.data(), size, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
         std::cerr << "Failed to copy vector A from host to device ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
 
-    err = cudaMemcpy(d_B, h_B.data(), size, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(devPtrB, hostVecB.data(), size, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
         std::cerr << "Failed to copy vector B from host to device ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
@@ -108,7 +104,7 @@ int test_vectorAdd() {
     int threadsPerBlock = 256;
     int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
     std::cout << "CUDA kernel launch with " << blocksPerGrid << " blocks of " << threadsPerBlock << " threads\n";
-    vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, numElements);
+    vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(devPtrA, devPtrB, devPtrC, numElements);
     err = cudaGetLastError();
 
     if (err != cudaSuccess) {
@@ -120,7 +116,7 @@ int test_vectorAdd() {
     // Copy the device result vector in device memory to the host result vector
     // in host memory.
     std::cout << "Copy output data from the CUDA device to the host memory\n";
-    err = cudaMemcpy(h_C.data(), d_C, size, cudaMemcpyDeviceToHost);
+    err = cudaMemcpy(hostVecC.data(), devPtrC, size, cudaMemcpyDeviceToHost);
     if (err != cudaSuccess) {
         std::cerr << "Failed to copy vector C from device to host ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
@@ -129,7 +125,7 @@ int test_vectorAdd() {
 
     // Verify that the result vector is correct
     for (int i = 0; i < numElements; ++i) {
-        if (std::fabs(h_A[i] + h_B[i] - h_C[i]) > std::numeric_limits<float>::epsilon()) {
+        if (std::fabs(hostVecA[i] + hostVecB[i] - hostVecC[i]) > std::numeric_limits<float>::epsilon()) {
             std::cerr << "Result verification failed at element " << i << std::endl;
             exit(EXIT_FAILURE);
         }
@@ -138,21 +134,21 @@ int test_vectorAdd() {
     std::cout << "Test PASSED\n";
 
     // Free device global memory
-    err = cudaFree(d_A);
+    err = cudaFree(devPtrA);
     if (err != cudaSuccess) {
         std::cerr << "Failed to free device vector A ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
 
-    err = cudaFree(d_B);
+    err = cudaFree(devPtrB);
     if (err != cudaSuccess) {
         std::cerr << "Failed to free device vector B ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
 
-    err = cudaFree(d_C);
+    err = cudaFree(devPtrC);
     if (err != cudaSuccess) {
         std::cerr << "Failed to free device vector C ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
