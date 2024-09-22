@@ -2,8 +2,9 @@
 #include "matmul.cuh"
 #include "common.h"
 #include "utility.h"
+#include "vectorAdd.cuh"
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    test_vectorAdd();
     return 0;
 }
