@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(cuda_learn CUDA)
+project(cuda_learn CXX CUDA)
 
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CUDA_STANDARD 17)
 
 file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cu)
 
