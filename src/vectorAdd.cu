@@ -10,9 +10,10 @@
  * of the programming guide with some additions like error checking.
  */
 
-#include "vectorAdd.cuh"
 #include "helper_math.h"
+#include "vectorAdd.cuh"
 
+#include <cstdio>
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>
 #include <random>
@@ -155,6 +156,7 @@ int test_vectorAdd() {
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
+
 
     std::cout << "Done\n";
 
