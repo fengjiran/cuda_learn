@@ -5,7 +5,8 @@ project(cuda_learn CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 #set(CMAKE_CUDA_STANDARD 17)
 
-file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cu)
+file(GLOB_RECURSE SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cu
+        ${PROJECT_SOURCE_DIR}/src/*.cpp)
 
 include_directories(${PROJECT_SOURCE_DIR}/include
         ${PROJECT_SOURCE_DIR}/common
