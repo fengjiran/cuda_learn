@@ -10,7 +10,6 @@
  * of the programming guide with some additions like error checking.
  */
 
-#include "helper_math.h"
 #include "vectorAdd.cuh"
 
 #include <cstdio>
