@@ -132,7 +132,7 @@ dmypy.json
 .idea/
 .pkl_memoize_py3/
 cmake-build-debug/
+bin/
 .DS_Store
 .pt
 .pth
-/tools/pnnx/tests/*.pt
