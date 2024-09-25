@@ -9,8 +9,8 @@
 #include <iostream>
 
 // includes, project
-#include <helper_cuda_drvapi.h>
-#include <helper_functions.h>
+#include "helper_cuda_drvapi.h"
+#include "helper_functions.h"
 
 // includes, CUDA
 #include <builtin_types.h>
@@ -56,7 +56,16 @@ int main(int argc, char** argv) {
     // First search for the module path before we load the results
     std::string module_path;
     std::ostringstream fatbin;
+    if (!findFatbinPath(FATBIN_FILE, module_path, argv, fatbin)) {
+        exit(EXIT_FAILURE);
+    } else {
+        std::cout << "> initCUDA loading module: <" << module_path << ">\n";
+    }
 
+    if (fatbin.str().empty()) {
+        std::cout << "fatbin file empty. exiting...\n";
+        exit(EXIT_FAILURE);
+    }
 
 
     return 0;

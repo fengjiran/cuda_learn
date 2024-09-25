@@ -5,10 +5,10 @@
 #ifndef HELPER_IMAGE_H
 #define HELPER_IMAGE_H
 
-#include <assert.h>
-#include <exception.h>
-#include <math.h>
-#include <stdint.h>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include "exception.h"
 
 #include <algorithm>
 #include <fstream>
@@ -27,7 +27,7 @@
 #define EXIT_WAIVED 2
 #endif
 
-#include <helper_string.h>
+#include "helper_string.h"
 
 // namespace unnamed (internal)
 namespace helper_image_internal {

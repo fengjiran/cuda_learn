@@ -5,14 +5,13 @@
 #ifndef HELPER_CUDA_DRVAPI_H
 #define HELPER_CUDA_DRVAPI_H
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <sstream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-#include <helper_string.h>
+#include "helper_string.h"
 
 #ifndef MAX
 #define MAX(a, b) (a > b ? a : b)
