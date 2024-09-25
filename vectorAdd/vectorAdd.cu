@@ -10,8 +10,6 @@
  * of the programming guide with some additions like error checking.
  */
 
-#include "vectorAdd.cuh"
-
 #include <cstdio>
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>
@@ -34,7 +32,7 @@ __global__ void vectorAdd(const float* a, const float* b, float* c, int numElems
 /**
  * Host test routine
  */
-int test_vectorAdd() {
+int main() {
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
 

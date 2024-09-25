@@ -40,7 +40,7 @@ bool findModulePath(const char*, std::string&, char**, std::string&);
 #endif
 
 // Host code
-int test_vectorAddDrv(int argc, char** argv) {
+int main(int argc, char** argv) {
     std::cout << "Vector Addition (Driver API)\n";
     int N = 50000;
     int devID = 0;
