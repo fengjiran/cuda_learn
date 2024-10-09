@@ -20,9 +20,6 @@ typedef struct {
     float* elements;
 } Matrix;
 
-// Thread block size
-#define BLOCK_SIZE 16
-
 // matmul kernel
 __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     // Each thread computes one element of C
@@ -38,17 +35,19 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
 }
 
 int main(int argc, char** argv) {
+    constexpr int blockSize = 16;// Thread block size
+
     // Error code to check return values for CUDA calls
     cudaError_t err = cudaSuccess;
 
     std::cout << "[Matrix Multiply Using CUDA] - Starting...\n";
     Matrix hostA;
-    hostA.width = 10 * BLOCK_SIZE;
-    hostA.height = 10 * BLOCK_SIZE;
+    hostA.width = 10 * blockSize;
+    hostA.height = 10 * blockSize;
 
     Matrix hostB;
-    hostB.width = 20 * BLOCK_SIZE;
-    hostB.height = 10 * BLOCK_SIZE;
+    hostB.width = 20 * blockSize;
+    hostB.height = 10 * blockSize;
 
     Matrix hostC;
     hostC.width = hostB.width;
@@ -72,6 +71,14 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
+    // Allocate host memory for matrix C
+    unsigned int sizeC = hostC.height * hostC.width * sizeof(float);
+    err = cudaMallocHost(&hostC.elements, sizeC);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate host memory for matrix C "
+                  << "(error code " << cudaGetErrorString(err) << ")\n";
+        exit(EXIT_FAILURE);
+    }
 
     // initialize host memory A
     for (int i = 0; i < hostA.height * hostA.width; ++i) {
@@ -83,14 +90,62 @@ int main(int argc, char** argv) {
         *(hostB.elements + i) = 0.01f;
     }
 
+    // Allocate device memory for matrix A
+    Matrix devA(hostA);
+    err = cudaMalloc(reinterpret_cast<void**>(&devA.elements), sizeA);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate device memory for matrix A "
+                  << "(error code " << cudaGetErrorString(err) << ")\n";
+        exit(EXIT_FAILURE);
+    }
+    cudaMemcpy(devA.elements, hostA.elements, sizeA, cudaMemcpyHostToDevice);
 
-    // free host and device memory
+    Matrix devB(hostB);
+    err = cudaMalloc(reinterpret_cast<void**>(&devB.elements), sizeB);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate device memory for matrix B "
+                  << "(error code " << cudaGetErrorString(err) << ")\n";
+        exit(EXIT_FAILURE);
+    }
+    cudaMemcpy(devB.elements, hostB.elements, sizeB, cudaMemcpyHostToDevice);
+
+    Matrix devC(hostC);
+    err = cudaMalloc(reinterpret_cast<void**>(&devC.elements), sizeC);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to allocate device memory for matrix C "
+                  << "(error code " << cudaGetErrorString(err) << ")\n";
+        exit(EXIT_FAILURE);
+    }
+
+    // launch the matmul cuda kernel
+    dim3 threadsPerBlock(blockSize, blockSize);
+    dim3 blocksPerGrid(devC.width / threadsPerBlock.x, devC.height / threadsPerBlock.y);
+    MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
+    err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to launch Matmul kernel ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+
+    // Copy the device result matrix in device memory to the host result vector
+    // in host memory.
+    std::cout << "Copy output data from the CUDA device to the host memory\n";
+    err = cudaMemcpy(hostC.elements, devC.elements, sizeC, cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to copy matrix C from device to host ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+
+    // free host memory
     err = cudaFreeHost(hostA.elements);
     if (err != cudaSuccess) {
         std::cerr << "Failed to free host matrix A ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
+    hostA.elements = nullptr;
 
     err = cudaFreeHost(hostB.elements);
     if (err != cudaSuccess) {
@@ -98,6 +153,39 @@ int main(int argc, char** argv) {
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
     }
+    hostB.elements = nullptr;
+
+    err = cudaFreeHost(hostC.elements);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to free host matrix C ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+    hostC.elements = nullptr;
+
+    // free device memory
+    err = cudaFree(devA.elements);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to free device matrix A ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+
+    err = cudaFree(devB.elements);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to free device matrix B ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+
+    err = cudaFree(devC.elements);
+    if (err != cudaSuccess) {
+        std::cerr << "Failed to free host matrix C ("
+                  << "error code " << cudaGetErrorString(err) << ")!\n";
+        exit(EXIT_FAILURE);
+    }
+
+    std::cout << "Done\n";
 
     return 0;
 }
