@@ -9,8 +9,8 @@
 #include <iostream>
 
 // includes, project
-#include "helper_cuda_drvapi.h"
-#include "helper_functions.h"
+#include <helper_cuda_drvapi.h>
+#include <helper_functions.h>
 
 // includes, CUDA
 #include <builtin_types.h>
