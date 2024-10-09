@@ -14,3 +14,4 @@ set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
 
 add_subdirectory(vectorAdd)
 add_subdirectory(vectorAddDrv)
+add_subdirectory(matmulRaw)
