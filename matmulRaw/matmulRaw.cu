@@ -24,12 +24,18 @@ typedef struct {
 __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     // Each thread computes one element of C
     // by accumulating results into cvalue
-    float cvalue = 0;
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
+    float cvalue = 0;
+    float y = 0;
     for (int k = 0; k < A.width; ++k) {
-        cvalue += A.elements[row * A.width + k] * B.elements[k * B.width + col];
+        float r;
+        y -= A.elements[row * A.width + k] * B.elements[k * B.width + col];
+        r = cvalue - y;
+        y = (r - cvalue) + y;
+        cvalue = r;
+        // cvalue += A.elements[row * A.width + k] * B.elements[k * B.width + col];
     }
     C.elements[row * C.width + col] = cvalue;
 }
@@ -80,14 +86,18 @@ int main(int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dist(0, 1);
+
     // initialize host memory A
     for (int i = 0; i < hostA.height * hostA.width; ++i) {
-        *(hostA.elements + i) = 1.0f;
+        hostA.elements[i] = dist(gen);
     }
 
     // initialize host memory B
     for (int i = 0; i < hostB.height * hostB.width; ++i) {
-        *(hostB.elements + i) = 0.01f;
+        hostB.elements[i] = dist(gen);
     }
 
     // Allocate device memory for matrix A
@@ -136,6 +146,28 @@ int main(int argc, char** argv) {
         std::cerr << "Failed to copy matrix C from device to host ("
                   << "error code " << cudaGetErrorString(err) << ")!\n";
         exit(EXIT_FAILURE);
+    }
+
+    // verify that the result matrix is correct
+    for (int i = 0; i < hostC.height; ++i) {
+        for (int j = 0; j < hostC.width; ++j) {
+            double c = 0;
+            for (int k = 0; k < hostA.width; ++k) {
+                float a = hostA.elements[i * hostA.width + k];
+                float b = hostB.elements[k * hostB.width + j];
+                c += a * b;
+            }
+            // std::cout << "device value = " << c << std::endl;
+            // std::cout << "host value = " << hostC.elements[i * hostC.width + j] << std::endl;
+            // std::cout << "fabs = " << std::fabs((c - hostC.elements[i * hostC.width + j]) / c) << std::endl;
+            // std::cout << "epsilon = " << std::numeric_limits<float>::epsilon() << std::endl;
+            // std::cout << std::endl;
+            if (std::fabs((c - hostC.elements[i * hostC.width + j]) / c) > std::numeric_limits<float>::epsilon()) {
+                std::cerr << "Result verification failed at element ("
+                          << i << ", " << j << ")" << std::endl;
+                exit(EXIT_FAILURE);
+            }
+        }
     }
 
     // free host memory
