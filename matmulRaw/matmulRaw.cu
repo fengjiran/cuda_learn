@@ -6,6 +6,7 @@
  * This sample implements matrix multiplication which makes use of global memory.
  */
 
+#include "helper_cuda.h"
 #include <cstdio>
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>

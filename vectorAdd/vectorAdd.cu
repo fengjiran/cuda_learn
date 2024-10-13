@@ -10,6 +10,7 @@
  * of the programming guide with some additions like error checking.
  */
 
+#include "helper_cuda.h"
 #include <cstdio>
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
 #include <iostream>
@@ -34,7 +35,7 @@ __global__ void vectorAdd(const float* a, const float* b, float* c, int numElems
  */
 int main() {
     // Error code to check return values for CUDA calls
-    cudaError_t err = cudaSuccess;
+    // cudaError_t err = cudaSuccess;
 
     // Print the vector length to be used, and compute its size
     int numElements = 50000;
@@ -57,70 +58,33 @@ int main() {
 
     // Allocate the device input vector A
     float* devPtrA = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&devPtrA), size);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to allocate device vector A ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devPtrA), size));
 
     // Allocate the device input vector A
     float* devPtrB = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&devPtrB), size);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to allocate device vector B ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devPtrB), size));
 
     // Allocate the device output vector C
     float* devPtrC = nullptr;
-    err = cudaMalloc(reinterpret_cast<void**>(&devPtrC), size);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to allocate device vector C ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devPtrC), size));
 
     // Copy the host input vectors A and B in host memory to the device input
     // vectors in device memory
     std::cout << "Copy input data from the host memory to the CUDA device\n";
-    err = cudaMemcpy(devPtrA, hostVecA.data(), size, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to copy vector A from host to device ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
-
-    err = cudaMemcpy(devPtrB, hostVecB.data(), size, cudaMemcpyHostToDevice);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to copy vector B from host to device ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaMemcpy(devPtrA, hostVecA.data(), size, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(devPtrB, hostVecB.data(), size, cudaMemcpyHostToDevice));
 
     // launch the vector add cuda kernel
     int threadsPerBlock = 256;
     int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
     std::cout << "CUDA kernel launch with " << blocksPerGrid << " blocks of " << threadsPerBlock << " threads\n";
     vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(devPtrA, devPtrB, devPtrC, numElements);
-    err = cudaGetLastError();
-
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to launch vectorAdd kernel ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaGetLastError());
 
     // Copy the device result vector in device memory to the host result vector
     // in host memory.
     std::cout << "Copy output data from the CUDA device to the host memory\n";
-    err = cudaMemcpy(hostVecC.data(), devPtrC, size, cudaMemcpyDeviceToHost);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to copy vector C from device to host ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaMemcpy(hostVecC.data(), devPtrC, size, cudaMemcpyDeviceToHost));
 
     // Verify that the result vector is correct
     for (int i = 0; i < numElements; ++i) {
@@ -133,26 +97,9 @@ int main() {
     std::cout << "Test PASSED\n";
 
     // Free device global memory
-    err = cudaFree(devPtrA);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to free device vector A ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
-
-    err = cudaFree(devPtrB);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to free device vector B ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
-
-    err = cudaFree(devPtrC);
-    if (err != cudaSuccess) {
-        std::cerr << "Failed to free device vector C ("
-                  << "error code " << cudaGetErrorString(err) << ")!\n";
-        exit(EXIT_FAILURE);
-    }
+    checkCudaErrors(cudaFree(devPtrA));
+    checkCudaErrors(cudaFree(devPtrB));
+    checkCudaErrors(cudaFree(devPtrC));
 
     std::cout << "Done\n";
 
