@@ -50,12 +50,12 @@ int main(int argc, char** argv) {
 
     std::cout << "[Matrix Multiply Using CUDA] - Starting...\n";
     Matrix hostA;
-    hostA.width = 10 * blockSize;
-    hostA.height = 10 * blockSize;
+    hostA.width = 100 * blockSize;
+    hostA.height = 100 * blockSize;
 
     Matrix hostB;
-    hostB.width = 20 * blockSize;
-    hostB.height = 10 * blockSize;
+    hostB.width = 200 * blockSize;
+    hostB.height = 100 * blockSize;
 
     Matrix hostC;
     hostC.width = hostB.width;
@@ -100,9 +100,15 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devC.elements), sizeC));
 
     // launch the matmul cuda kernel
+    int nIter = 300;
+    std::cout << "Execute the kernel for " << nIter << "\n";
+
     dim3 threadsPerBlock(blockSize, blockSize);
     dim3 blocksPerGrid(devC.width / threadsPerBlock.x, devC.height / threadsPerBlock.y);
-    MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
+    for (int i = 0; i < nIter; ++i) {
+        MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
+    }
+
     checkCudaErrors(cudaGetLastError());
 
     // Copy the device result matrix in device memory to the host result vector
@@ -111,6 +117,9 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaMemcpy(hostC.elements, devC.elements, sizeC, cudaMemcpyDeviceToHost));
 
     // verify that the result matrix is correct
+    std::cout << "Checking computed result for correctness...\n";
+    bool correct = true;
+
     for (int i = 0; i < hostC.height; ++i) {
         for (int j = 0; j < hostC.width; ++j) {
             double c = 0;
@@ -119,15 +128,10 @@ int main(int argc, char** argv) {
                 float b = hostB.elements[k * hostB.width + j];
                 c += a * b;
             }
-            // std::cout << "device value = " << c << std::endl;
-            // std::cout << "host value = " << hostC.elements[i * hostC.width + j] << std::endl;
-            // std::cout << "fabs = " << std::fabs((c - hostC.elements[i * hostC.width + j]) / c) << std::endl;
-            // std::cout << "epsilon = " << std::numeric_limits<float>::epsilon() << std::endl;
-            // std::cout << std::endl;
             if (std::fabs((c - hostC.elements[i * hostC.width + j]) / c) > std::numeric_limits<float>::epsilon()) {
                 std::cerr << "Result verification failed at element ("
                           << i << ", " << j << ")" << std::endl;
-                exit(EXIT_FAILURE);
+                correct = false;
             }
         }
     }
@@ -146,6 +150,10 @@ int main(int argc, char** argv) {
     checkCudaErrors(cudaFree(devA.elements));
     checkCudaErrors(cudaFree(devB.elements));
     checkCudaErrors(cudaFree(devC.elements));
+
+    if (!correct) {
+        exit(EXIT_FAILURE);
+    }
 
     std::cout << "Done\n";
 
