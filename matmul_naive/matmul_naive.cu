@@ -22,24 +22,26 @@ typedef struct {
 } Matrix;
 
 // matmul kernel
-__global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
+__global__ void MatMulKernel(const Matrix A, const Matrix B, const Matrix C) {
     // Each thread computes one element of C
     // by accumulating results into cvalue
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Kahan summation formula
-    float cvalue = 0;
-    float y = 0;
-    for (int k = 0; k < A.width; ++k) {
-        float r;
-        y -= A.elements[row * A.width + k] * B.elements[k * B.width + col];
-        r = cvalue - y;
-        y = (r - cvalue) + y;
-        cvalue = r;
-        // cvalue += A.elements[row * A.width + k] * B.elements[k * B.width + col];
+    if (row < C.height && col < C.width) {
+        // Kahan summation formula
+        float cvalue = 0;
+        float y = 0;
+        for (int k = 0; k < A.width; ++k) {
+            float r;
+            y -= A.elements[row * A.width + k] * B.elements[k * B.width + col];
+            r = cvalue - y;
+            y = (r - cvalue) + y;
+            cvalue = r;
+            // cvalue += A.elements[row * A.width + k] * B.elements[k * B.width + col];
+        }
+        C.elements[row * C.width + col] = cvalue;
     }
-    C.elements[row * C.width + col] = cvalue;
 }
 
 int main(int argc, char** argv) {
