@@ -31,14 +31,12 @@ __global__ void MatMulKernel(const Matrix A, const Matrix B, const Matrix C) {
     if (row < C.height && col < C.width) {
         // Kahan summation formula
         float cvalue = 0;
-        float y = 0;
+        float loss = 0;
         for (int k = 0; k < A.width; ++k) {
-            float r;
-            y -= A.elements[row * A.width + k] * B.elements[k * B.width + col];
-            r = cvalue - y;
-            y = (r - cvalue) + y;
-            cvalue = r;
-            // cvalue += A.elements[row * A.width + k] * B.elements[k * B.width + col];
+            float cur = A.elements[row * A.width + k] * B.elements[k * B.width + col] - loss;
+            float tmp = cvalue + cur;
+            loss = tmp - cvalue - cur;
+            cvalue = tmp;
         }
         C.elements[row * C.width + col] = cvalue;
     }
