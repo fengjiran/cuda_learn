@@ -26,19 +26,19 @@ typedef struct {
 } Matrix;
 
 // Get a matrix element
-__device__ float GetElement(Matrix A, int row, int col) {
+__device__ float GetElement(const Matrix& A, size_t row, size_t col) {
     return A.elements[row * A.stride + col];
 }
 
 // Set a matrix element
-__device__ void SetElement(Matrix A, int row, int col, float val) {
+__device__ void SetElement(const Matrix& A, size_t row, size_t col, float val) {
     A.elements[row * A.stride + col] = val;
 }
 
 // Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A that is
 // located col sub-matrices to the right and row sub-matrices down
 // from the upper-left corner of A
-__device__ Matrix GetSubMatrix(Matrix A, int row, int col) {
+__device__ Matrix GetSubMatrix(const Matrix& A, size_t row, size_t col) {
     Matrix sub;
     sub.height = blockSize;
     sub.width = blockSize;
@@ -50,19 +50,21 @@ __device__ Matrix GetSubMatrix(Matrix A, int row, int col) {
 // Matrix multiplication kernel
 __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     // block row and col
-    int blockRow = blockIdx.y;
-    int blockCol = blockIdx.x;
+    size_t blockRow = blockIdx.y;
+    size_t blockCol = blockIdx.x;
 
     // each thread block computes one sub-matrix of C
     auto csub = GetSubMatrix(C, blockRow, blockCol);
 
-    // each thread computes one element of csub
-    // by accumulating results into cvalue
-    float cvalue = 0;
-
     // thread row and col within csub
-    int row = threadIdx.y;
-    int col = threadIdx.x;
+    size_t row = threadIdx.y;
+    size_t col = threadIdx.x;
+
+    // each thread computes one element of csub
+    // by accumulating results into cvalue.
+    // kahan summation formula
+    float cvalue = 0;
+    float loss = 0;
 
     // loop over all the sub-matrices of A and B
     // are required to compute csub.
@@ -88,18 +90,23 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         __syncthreads();
 
         // multiply subA and subB
-        // float tmp = 0;
-        // float y = 0;
-        for (int k = 0; k < blockSize; k++) {
-            // float r;
-            // y -= smA[row][k] * smB[k][col];
-            // r = tmp - y;
-            // y = (r - tmp) + y;
-            // tmp = r;
-            cvalue += smA[row][k] * smB[k][col];
-        }
-        // cvalue += tmp;
+        float sum = 0;
+        float loss1 = 0;
 
+#pragma unroll
+        for (int k = 0; k < blockSize; k++) {
+            float cur = smA[row][k] * smB[k][col] - loss1;
+            float tmp = sum + cur;
+            loss1 = tmp - sum - cur;
+            sum = tmp;
+        }
+
+        float cur = sum - loss;
+        float tmp = cvalue + cur;
+        loss = tmp - cvalue - cur;
+        cvalue = tmp;
+
+        // cvalue += sum;
         __syncthreads();
     }
 
@@ -194,13 +201,13 @@ int main(int argc, char** argv) {
                 float b = hostB.elements[k * hostB.width + j];
                 c += a * b;
             }
+
             if (std::fabs((c - hostC.elements[i * hostC.width + j]) / c) > std::numeric_limits<float>::epsilon()) {
-                // std::cerr << "Result verification failed at element ("
-                //           << i << ", " << j << ")" << std::endl;
-                // std::cout << "host: " << c << ", "
-                //           << "device: " << hostC.elements[i * hostC.width + j] << std::endl;
+                std::cerr << "Result verification failed at element ("
+                          << i << ", " << j << ")" << std::endl;
+                std::cout << "host: " << c << ", "
+                          << "device: " << hostC.elements[i * hostC.width + j] << std::endl;
                 correct = false;
-                // break;
             }
         }
     }
