@@ -67,18 +67,15 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     size_t heightTail = C.height % blockDim.y;
     size_t widthTail = C.width % blockDim.x;
 
-    size_t subHeight = blockIdx.y == gridDim.y - 1 && heightTail != 0 ? heightTail : blockDim.y;
-    size_t subWidth = blockIdx.x == gridDim.x - 1 && widthTail != 0 ? widthTail : blockDim.x;
-    // printf("subWidth = %lu\n", subWidth);
+    size_t tileM = blockIdx.y == gridDim.y - 1 && heightTail != 0 ? heightTail : blockDim.y;
+    size_t tileN = blockIdx.x == gridDim.x - 1 && widthTail != 0 ? widthTail : blockDim.x;
 
     // thread row and col within csub
     size_t row = threadIdx.y;
     size_t col = threadIdx.x;
 
     // each thread block computes one sub-matrix of C
-    // Matrix csub(subHeight, subWidth, C.stride,
-    //             &C.elements[blockIdx.y * blockDim.y * C.stride + blockIdx.x * blockDim.x]);
-    auto csub = GetSubMatrix(C, blockRow, blockCol, subHeight, subWidth);
+    auto csub = GetSubMatrix(C, blockRow, blockCol, tileM, tileN);
 
     // each thread computes one element of csub
     // by accumulating results into cvalue.
@@ -91,13 +88,13 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     // Multipy each pair of sub-matrices together
     // and accumulate the results.
     size_t blockNum = (A.width + blockSize - 1) / blockSize;
-    size_t ktail = A.width % blockSize;
+    size_t tail = A.width % blockSize;
     for (int m = 0; m < blockNum; m++) {
-        size_t tileK = m == blockNum - 1 && ktail != 0 ? ktail : blockSize;
+        size_t tileK = m == blockNum - 1 && tail != 0 ? tail : blockSize;
 
         // Get subA and subB
-        auto subA = GetSubMatrix(A, blockRow, m, subHeight, tileK);
-        auto subB = GetSubMatrix(B, m, blockCol, tileK, subWidth);
+        auto subA = GetSubMatrix(A, blockRow, m, tileM, tileK);
+        auto subB = GetSubMatrix(B, m, blockCol, tileK, tileN);
 
         // Allocate shared memory used to store subA and subB
         __shared__ float smA[blockSize][blockSize];
@@ -106,13 +103,13 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         // Load subA and subB from global memory to
         // shared memory. Each thread loads one element
         // of each sub-matrix.
-        if (row < subHeight && col < tileK) {
+        if (row < tileM && col < tileK) {
             smA[row][col] = GetElement(subA, row, col);
         } else {
             smA[row][col] = 0;
         }
 
-        if (row < tileK && col < subWidth) {
+        if (row < tileK && col < tileN) {
             smB[row][col] = GetElement(subB, row, col);
         } else {
             smB[row][col] = 0;
@@ -125,8 +122,6 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         // multiply subA and subB
         float sum = 0;
         float loss1 = 0;
-        // if (blockIdx.y * blockDim.y + threadIdx.y < C.height &&
-        //     blockIdx.x * blockDim.x + threadIdx.x < C.width) {}
 
 #pragma unroll
         for (int k = 0; k < tileK; k++) {
