@@ -13,13 +13,17 @@
 #include <random>
 #include <vector>
 
-// Matrices are stored in row-major order
-// M(row, col) = *(M.elements + row * M.width + col)
-typedef struct {
-    int width;
-    int height;
-    float* elements;
-} Matrix;
+class Matrix {
+public:
+    Matrix() = default;
+    Matrix(size_t h, size_t w) : height(h), width(w), elements(nullptr) {}
+    Matrix(size_t h, size_t w, float* ele) : height(h), width(w), elements(ele) {}
+
+public:
+    size_t height{0};
+    size_t width{0};
+    float* elements{nullptr};
+};
 
 // matmul kernel
 __global__ void MatMulKernel(const Matrix A, const Matrix B, const Matrix C) {
@@ -49,17 +53,13 @@ int main(int argc, char** argv) {
     // cudaError_t err = cudaSuccess;
 
     std::cout << "[Matrix Multiply Using CUDA] - Starting...\n";
-    Matrix hostA;
-    hostA.width = 100 * blockSize;
-    hostA.height = 100 * blockSize;
+    size_t M = 1000;
+    size_t N = 2000;
+    size_t K = 1000;
 
-    Matrix hostB;
-    hostB.width = 200 * blockSize;
-    hostB.height = 100 * blockSize;
-
-    Matrix hostC;
-    hostC.width = hostB.width;
-    hostC.height = hostA.height;
+    Matrix hostA(M, K);
+    Matrix hostB(K, N);
+    Matrix hostC(M, N);
 
     // Allocate host memory for matrix A
     unsigned int sizeA = hostA.height * hostA.width * sizeof(float);
@@ -88,15 +88,15 @@ int main(int argc, char** argv) {
     }
 
     // Allocate device memory for matrix A
-    Matrix devA(hostA);
+    Matrix devA(M, K);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devA.elements), sizeA));
     checkCudaErrors(cudaMemcpy(devA.elements, hostA.elements, sizeA, cudaMemcpyHostToDevice));
 
-    Matrix devB(hostB);
+    Matrix devB(K, N);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devB.elements), sizeB));
     checkCudaErrors(cudaMemcpy(devB.elements, hostB.elements, sizeB, cudaMemcpyHostToDevice));
 
-    Matrix devC(hostC);
+    Matrix devC(M, N);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devC.elements), sizeC));
 
     // launch the matmul cuda kernel
@@ -104,7 +104,8 @@ int main(int argc, char** argv) {
     std::cout << "Execute the kernel for " << nIter << "\n";
 
     dim3 threadsPerBlock(blockSize, blockSize);
-    dim3 blocksPerGrid(devC.width / threadsPerBlock.x, devC.height / threadsPerBlock.y);
+    dim3 blocksPerGrid((devC.width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (devC.height + threadsPerBlock.y - 1) / threadsPerBlock.y);
     for (int i = 0; i < nIter; ++i) {
         MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
     }

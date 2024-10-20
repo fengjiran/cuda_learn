@@ -18,12 +18,23 @@ constexpr int blockSize = 16;
 
 // Matrices are stored in row-major order
 // M(row, col) = *(M.elements + row * M.stride + col)
-typedef struct {
-    int width;
-    int height;
-    int stride;
-    float* elements;
-} Matrix;
+// typedef struct {
+//     int width;
+//     int height;
+//     int stride;
+//     float* elements;
+// } Matrix;
+
+struct Matrix {
+    Matrix() = default;
+    Matrix(size_t h, size_t w, size_t s) : height(h), width(w), stride(s) {}
+    Matrix(size_t h, size_t w, size_t s, float* ele) : height(h), width(w), stride(s), elements(ele) {}
+
+    size_t height{0};
+    size_t width{0};
+    size_t stride{0};
+    float* elements{nullptr};
+};
 
 // Get a matrix element
 __device__ float GetElement(const Matrix& A, size_t row, size_t col) {
@@ -35,15 +46,15 @@ __device__ void SetElement(const Matrix& A, size_t row, size_t col, float val) {
     A.elements[row * A.stride + col] = val;
 }
 
-// Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A that is
+// Get a sub-matrix of A that is
 // located col sub-matrices to the right and row sub-matrices down
 // from the upper-left corner of A
-__device__ Matrix GetSubMatrix(const Matrix& A, size_t row, size_t col) {
+__device__ Matrix GetSubMatrix(const Matrix& A, size_t row, size_t col, size_t height, size_t width) {
     Matrix sub;
-    sub.height = blockSize;
-    sub.width = blockSize;
+    sub.height = height;
+    sub.width = width;
     sub.stride = A.stride;
-    sub.elements = &A.elements[row * blockSize * A.stride + col * blockSize];
+    sub.elements = &A.elements[row * blockDim.y * A.stride + col * blockDim.x];
     return sub;
 }
 
@@ -53,12 +64,21 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     size_t blockRow = blockIdx.y;
     size_t blockCol = blockIdx.x;
 
-    // each thread block computes one sub-matrix of C
-    auto csub = GetSubMatrix(C, blockRow, blockCol);
+    size_t heightTail = C.height % blockDim.y;
+    size_t widthTail = C.width % blockDim.x;
+
+    size_t subHeight = blockIdx.y == gridDim.y - 1 && heightTail != 0 ? heightTail : blockDim.y;
+    size_t subWidth = blockIdx.x == gridDim.x - 1 && widthTail != 0 ? widthTail : blockDim.x;
+    // printf("subWidth = %lu\n", subWidth);
 
     // thread row and col within csub
     size_t row = threadIdx.y;
     size_t col = threadIdx.x;
+
+    // each thread block computes one sub-matrix of C
+    // Matrix csub(subHeight, subWidth, C.stride,
+    //             &C.elements[blockIdx.y * blockDim.y * C.stride + blockIdx.x * blockDim.x]);
+    auto csub = GetSubMatrix(C, blockRow, blockCol, subHeight, subWidth);
 
     // each thread computes one element of csub
     // by accumulating results into cvalue.
@@ -70,10 +90,14 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
     // are required to compute csub.
     // Multipy each pair of sub-matrices together
     // and accumulate the results.
-    for (int m = 0; m < A.width / blockSize; m++) {
+    size_t blockNum = (A.width + blockSize - 1) / blockSize;
+    size_t ktail = A.width % blockSize;
+    for (int m = 0; m < blockNum; m++) {
+        size_t tileK = m == blockNum - 1 && ktail != 0 ? ktail : blockSize;
+
         // Get subA and subB
-        auto subA = GetSubMatrix(A, blockRow, m);
-        auto subB = GetSubMatrix(B, m, blockCol);
+        auto subA = GetSubMatrix(A, blockRow, m, subHeight, tileK);
+        auto subB = GetSubMatrix(B, m, blockCol, tileK, subWidth);
 
         // Allocate shared memory used to store subA and subB
         __shared__ float smA[blockSize][blockSize];
@@ -82,8 +106,17 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         // Load subA and subB from global memory to
         // shared memory. Each thread loads one element
         // of each sub-matrix.
-        smA[row][col] = GetElement(subA, row, col);
-        smB[row][col] = GetElement(subB, row, col);
+        if (row < subHeight && col < tileK) {
+            smA[row][col] = GetElement(subA, row, col);
+        } else {
+            smA[row][col] = 0;
+        }
+
+        if (row < tileK && col < subWidth) {
+            smB[row][col] = GetElement(subB, row, col);
+        } else {
+            smB[row][col] = 0;
+        }
 
         // Synchronize to make sure the sub-matrices are loaded
         // before starting the computation.
@@ -92,9 +125,11 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         // multiply subA and subB
         float sum = 0;
         float loss1 = 0;
+        // if (blockIdx.y * blockDim.y + threadIdx.y < C.height &&
+        //     blockIdx.x * blockDim.x + threadIdx.x < C.width) {}
 
 #pragma unroll
-        for (int k = 0; k < blockSize; k++) {
+        for (int k = 0; k < tileK; k++) {
             float cur = smA[row][k] * smB[k][col] - loss1;
             float tmp = sum + cur;
             loss1 = tmp - sum - cur;
@@ -106,44 +141,39 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C) {
         loss = tmp - cvalue - cur;
         cvalue = tmp;
 
-        // cvalue += sum;
         __syncthreads();
     }
 
     // write csub to global memory
     // each thread writes one element
-    SetElement(csub, row, col, cvalue);
+    if (blockIdx.y * blockDim.y + threadIdx.y < C.height &&
+        blockIdx.x * blockDim.x + threadIdx.x < C.width) {
+        SetElement(csub, row, col, cvalue);
+    }
 }
 
 // Host code
 int main(int argc, char** argv) {
     // load A and B to device memory
     std::cout << "[Matrix Multiply Using CUDA] - Starting...\n";
-    Matrix hostA;
-    hostA.width = 100 * blockSize;
-    hostA.height = 100 * blockSize;
-    hostA.stride = hostA.width;
+    size_t M = 1000;
+    size_t N = 2000;
+    size_t K = 1000;
 
-    Matrix hostB;
-    hostB.width = 200 * blockSize;
-    hostB.height = 100 * blockSize;
-    hostB.stride = hostB.width;
-
-    Matrix hostC;
-    hostC.width = hostB.width;
-    hostC.height = hostA.height;
-    hostC.stride = hostC.width;
+    Matrix hostA(M, K, K);
+    Matrix hostB(K, N, N);
+    Matrix hostC(M, N, N);
 
     // Allocate host memory for matrix A
-    unsigned int sizeA = hostA.height * hostA.width * sizeof(float);
+    size_t sizeA = hostA.height * hostA.width * sizeof(float);
     checkCudaErrors(cudaMallocHost(&hostA.elements, sizeA));
 
     // Allocate host memory for matrix B
-    unsigned int sizeB = hostB.height * hostB.width * sizeof(float);
+    size_t sizeB = hostB.height * hostB.width * sizeof(float);
     checkCudaErrors(cudaMallocHost(&hostB.elements, sizeB));
 
     // Allocate host memory for matrix C
-    unsigned int sizeC = hostC.height * hostC.width * sizeof(float);
+    size_t sizeC = hostC.height * hostC.width * sizeof(float);
     checkCudaErrors(cudaMallocHost(&hostC.elements, sizeC));
 
     std::random_device rd;
@@ -161,15 +191,15 @@ int main(int argc, char** argv) {
     }
 
     // Allocate device memory for matrix A
-    Matrix devA(hostA);
+    Matrix devA(M, K, K);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devA.elements), sizeA));
     checkCudaErrors(cudaMemcpy(devA.elements, hostA.elements, sizeA, cudaMemcpyHostToDevice));
 
-    Matrix devB(hostB);
+    Matrix devB(K, N, N);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devB.elements), sizeB));
     checkCudaErrors(cudaMemcpy(devB.elements, hostB.elements, sizeB, cudaMemcpyHostToDevice));
 
-    Matrix devC(hostC);
+    Matrix devC(M, N, N);
     checkCudaErrors(cudaMalloc(reinterpret_cast<void**>(&devC.elements), sizeC));
 
     // launch the matmul cuda kernel
@@ -177,7 +207,8 @@ int main(int argc, char** argv) {
     std::cout << "Execute the kernel for " << nIter << "\n";
 
     dim3 threadsPerBlock(blockSize, blockSize);
-    dim3 blocksPerGrid(devC.width / threadsPerBlock.x, devC.height / threadsPerBlock.y);
+    dim3 blocksPerGrid((devC.width + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                       (devC.height + threadsPerBlock.x - 1) / threadsPerBlock.y);
     for (int i = 0; i < nIter; ++i) {
         MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
     }
@@ -207,6 +238,7 @@ int main(int argc, char** argv) {
                           << i << ", " << j << ")" << std::endl;
                 std::cout << "host: " << c << ", "
                           << "device: " << hostC.elements[i * hostC.width + j] << std::endl;
+                std::cout << std::endl;
                 correct = false;
             }
         }
