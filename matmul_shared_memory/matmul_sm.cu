@@ -6,6 +6,7 @@
  * to ensure data reuse, the matrix multiplication is done using tiling approach.
  */
 
+#include "cmdline.h"
 #include "helper_cuda.h"
 #include <cstdio>
 #include <cuda_runtime.h>// For the CUDA runtime routines (prefixed with "cuda_")
