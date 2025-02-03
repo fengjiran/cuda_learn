@@ -19,13 +19,6 @@ constexpr int blockSize = 16;
 
 // Matrices are stored in row-major order
 // M(row, col) = *(M.elements + row * M.stride + col)
-// typedef struct {
-//     int width;
-//     int height;
-//     int stride;
-//     float* elements;
-// } Matrix;
-
 struct Matrix {
     Matrix() = default;
     Matrix(size_t h, size_t w, size_t s) : height(h), width(w), stride(s) {}
@@ -156,6 +149,8 @@ int main(int argc, char** argv) {
     size_t N = 2000;
     size_t K = 1000;
 
+    double gflops = 2.0 * M * N * K * 1.0e-9;
+
     Matrix hostA(M, K, K);
     Matrix hostB(K, N, N);
     Matrix hostC(M, N, N);
@@ -200,13 +195,17 @@ int main(int argc, char** argv) {
 
     // launch the matmul cuda kernel
     int nIter = 300;
-    std::cout << "Execute the kernel for " << nIter << "\n";
+    std::cout << "Execute the kernel for " << nIter << " iters.\n";
 
     dim3 threadsPerBlock(blockSize, blockSize);
     dim3 blocksPerGrid((devC.width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                        (devC.height + threadsPerBlock.x - 1) / threadsPerBlock.y);
+    double run_time = 0;
     for (int i = 0; i < nIter; ++i) {
+        Timer t;
         MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
+        double tmp = t.GetElapsedTime();
+        run_time = i == 0 ? tmp : std::min(run_time, tmp);
     }
 
     checkCudaErrors(cudaGetLastError());
@@ -239,6 +238,9 @@ int main(int argc, char** argv) {
             }
         }
     }
+
+    std::cout << "runtime = " << run_time << std::endl;
+    std::cout << "gflops = " << gflops / run_time << std::endl;
 
     // free host memory
     checkCudaErrors(cudaFreeHost(hostA.elements));

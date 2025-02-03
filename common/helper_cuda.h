@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <random>
 #include <vector>
+#include <chrono>
 
 // CUDA Runtime error messages
 #ifdef __DRIVER_TYPES_H__
@@ -15,6 +16,22 @@ static const char* _cudaGetErrorEnum(cudaError_t error) {
     return cudaGetErrorName(error);
 }
 #endif
+
+class Timer {
+public:
+    Timer() : start(std::chrono::high_resolution_clock::now()) {}
+
+    // Get elapsed time in seconds
+    [[nodiscard]] double GetElapsedTime() const {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        return static_cast<double>(duration.count()) *
+               std::chrono::microseconds::period::num / std::chrono::microseconds::period::den;
+    }
+
+private:
+    std::chrono::high_resolution_clock::time_point start;
+};
 
 template<typename T = float,
          typename = std::enable_if_t<std::is_floating_point_v<T>>>

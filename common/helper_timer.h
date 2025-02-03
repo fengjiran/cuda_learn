@@ -427,9 +427,8 @@ inline float sdkGetTimerValue(StopWatchInterface** timer_interface) {
     // printf("sdkGetTimerValue called object %08x\n", (void *)*timer_interface);
     if (*timer_interface) {
         return (*timer_interface)->getTime();
-    } else {
-        return 0.0f;
     }
+    return 0.0f;
 }
 
 

@@ -19,7 +19,6 @@ public:
     Matrix(size_t h, size_t w) : height(h), width(w), elements(nullptr) {}
     Matrix(size_t h, size_t w, float* ele) : height(h), width(w), elements(ele) {}
 
-public:
     size_t height{0};
     size_t width{0};
     float* elements{nullptr};
@@ -36,7 +35,7 @@ __global__ void MatMulKernel(const Matrix A, const Matrix B, const Matrix C) {
         // Kahan summation formula
         float cvalue = 0;
         float loss = 0;
-        for (int k = 0; k < A.width; ++k) {
+        for (size_t k = 0; k < A.width; ++k) {
             float cur = A.elements[row * A.width + k] * B.elements[k * B.width + col] - loss;
             float tmp = cvalue + cur;
             loss = tmp - cvalue - cur;
@@ -56,6 +55,8 @@ int main(int argc, char** argv) {
     size_t M = 1000;
     size_t N = 2000;
     size_t K = 1000;
+
+    double gflops = 2.0 * M * N * K * 1.0e-9;
 
     Matrix hostA(M, K);
     Matrix hostB(K, N);
@@ -101,13 +102,17 @@ int main(int argc, char** argv) {
 
     // launch the matmul cuda kernel
     int nIter = 300;
-    std::cout << "Execute the kernel for " << nIter << "\n";
+    std::cout << "Execute the kernel for " << nIter << " iters.\n";
 
     dim3 threadsPerBlock(blockSize, blockSize);
     dim3 blocksPerGrid((devC.width + threadsPerBlock.x - 1) / threadsPerBlock.x,
                        (devC.height + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    double run_time = 0;
     for (int i = 0; i < nIter; ++i) {
+        Timer t;
         MatMulKernel<<<blocksPerGrid, threadsPerBlock>>>(devA, devB, devC);
+        double tmp = t.GetElapsedTime();
+        run_time = i == 0 ? tmp : std::min(run_time, tmp);
     }
 
     checkCudaErrors(cudaGetLastError());
@@ -136,6 +141,8 @@ int main(int argc, char** argv) {
             }
         }
     }
+
+    std::cout << "gflops = " << gflops / run_time << std::endl;
 
     // free host memory
     checkCudaErrors(cudaFreeHost(hostA.elements));
