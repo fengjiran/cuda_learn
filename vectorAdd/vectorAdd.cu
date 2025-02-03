@@ -24,7 +24,7 @@
  * number of elements numElements.
  */
 __global__ void vectorAdd(const float* a, const float* b, float* c, int numElems) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < numElems) {
         c[i] = a[i] + b[i] + 0.0f;
     }
@@ -42,19 +42,12 @@ int main() {
     size_t size = numElements * sizeof(float);
     std::cout << "[Vector addition of " << numElements << " elements]\n";
 
-    std::vector<float> hostVecA(numElements);// Allocate the host input vector A
-    std::vector<float> hostVecB(numElements);// Allocate the host input vector B
-    std::vector<float> hostVecC(numElements);// Allocate the host output vector C
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> dist(0, 1);
-
-    // Initialize the host input vectors
-    for (int i = 0; i < numElements; ++i) {
-        hostVecA[i] = dist(gen);
-        hostVecB[i] = dist(gen);
-    }
+    // Allocate the host input vector A
+    std::vector<float> hostVecA = GenRandomMatrix(1, numElements);
+    // Allocate the host input vector B
+    std::vector<float> hostVecB = GenRandomMatrix(1, numElements);
+    // Allocate the host output vector C
+    std::vector<float> hostVecC(numElements);
 
     // Allocate the device input vector A
     float* devPtrA = nullptr;

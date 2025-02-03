@@ -29,8 +29,8 @@ public:
 __global__ void MatMulKernel(const Matrix A, const Matrix B, const Matrix C) {
     // Each thread computes one element of C
     // by accumulating results into cvalue
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t row = blockIdx.y * blockDim.y + threadIdx.y;
+    size_t col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < C.height && col < C.width) {
         // Kahan summation formula
