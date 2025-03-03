@@ -14,6 +14,53 @@
 #include <random>
 #include <vector>
 
+#define OFFSET(row, col, ld) ((row) * (ld) + (col))
+
+template<const int tileM,        // height of block of C that each thread block compute
+         const int tileK,        // width of block of A that each thread block load into shared memory
+         const int tileN,        // width of block of C that each thread block compute
+         const int thread_size_y,// height of block of C that each thread compute
+         const int thread_size_x // width of block of C that each thread compute
+         >
+__global__ void Matmul(
+    float* __restrict__ A,
+    float* __restrict__ B,
+    float* __restrict__ C,
+    const int M,
+    const int K,
+    const int N,
+    float alpha,
+    float beta) {
+    // size of thread block
+    const int bszy = tileM / thread_size_y;
+    const int bszx = tileN / thread_size_x;
+    const int thread_num_per_block = bszx * bszy;
+
+    // thread id
+    const int tid = threadIdx.y * bszx + threadIdx.x;
+
+    // shared memory
+    __shared__ float As[tileM][tileK];
+    __shared__ float Bs[tileK][tileN];
+
+    // register for C
+    float accum[thread_size_y][thread_size_x] = {0};
+
+    // row and col index that needs to be loaded this thread
+    const int row_idx_A = tid / tileK;
+    const int col_idx_A = tid % tileK;
+
+    const int row_idx_B = tid / tileN;
+    const int col_idx_B = tid % tileN;
+
+    // row stride that thread uses to load multiple row of a tile
+    const int row_stride_A = thread_num_per_block / tileK;
+    const int row_stride_B = thread_num_per_block / tileN;
+
+    // element stride of this thread compute
+
+}
+
 // Thread block size
 constexpr int blockSize = 16;
 
